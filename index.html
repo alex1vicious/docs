@@ -1,0 +1,2072 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOEX TWIME ASTS v1.2 — Developer Docs</title>
+<style>
+:root{--bg:#0b1020;--panel:#121a2e;--panel2:#0f1628;--text:#e7ecff;--muted:#9daccc;--line:#253459;--accent:#64b5ff;--ok:#2dd4bf}
+*{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.layout{display:grid;grid-template-columns:280px 1fr;min-height:100vh}
+.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:20px;background:linear-gradient(180deg,#0c1325,#0a1020);border-right:1px solid var(--line)}
+.brand{font-weight:700;font-size:18px;line-height:1.3;margin-bottom:14px} .badge{display:inline-block;padding:3px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted);font-size:12px;margin-top:6px}
+.nav a{display:block;padding:8px 10px;border-radius:8px;color:#d6e1ff} .nav a:hover{background:#15203a;text-decoration:none}
+.main{padding:28px;max-width:1200px} .hero{background:linear-gradient(120deg,#13213e,#0f1830);border:1px solid var(--line);padding:20px;border-radius:14px}
+.hero h1{margin:0 0 8px;font-size:30px} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+.kpi{background:var(--panel2);border:1px solid var(--line);padding:12px;border-radius:10px} .kpi b{display:block;font-size:22px}
+section{margin-top:28px} h2{font-size:24px;margin-bottom:12px} .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px}
+.table-wrap{overflow:auto} table{width:100%;border-collapse:collapse;font-size:14px} th,td{padding:8px 10px;border-bottom:1px solid #1f2a48;vertical-align:top} th{text-align:left;color:#b9c8ea;background:#101a31;position:sticky;top:0}
+code{background:#0c1530;border:1px solid #1f2d55;border-radius:6px;padding:1px 6px;color:#cce2ff} details{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:10px 0} summary{padding:12px 14px;cursor:pointer;font-weight:600}
+.details-body{padding:0 14px 14px} .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px} .chip{font-size:12px;border:1px solid var(--line);border-radius:999px;padding:3px 8px;color:#bad0ff}
+input{width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:#0b1530;color:#f1f5ff}
+pre{background:#091227;border:1px solid var(--line);padding:12px;border-radius:10px;overflow:auto}
+@media (max-width:960px){.layout{grid-template-columns:1fr}.sidebar{position:relative;height:auto}}
+</style>
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <div class="brand">MOEX TWIME ASTS<br>Документация для разработчиков<div class="badge">v1.2 • Schema v1</div></div>
+  <nav class="nav">
+    <a href="#overview">Обзор</a>
+    <a href="#quickstart">Быстрый старт</a>
+    <a href="#session">Сессионный уровень</a>
+    <a href="#trading">Торговый уровень</a>
+    <a href="#messages">Сообщения (18)</a>
+    <a href="#enums">Перечисления</a>
+    <a href="#types">Типы данных</a>
+    <a href="#sources">Официальные источники</a>
+  </nav>
+</aside>
+<main class="main">
+  <section id="overview" class="hero">
+    <h1>TWIME / ASTS Gateway API</h1>
+    <p>Единая offline-страница по спецификации <b>«Спецификация бинарного протокола TWIME для фондового и валютного рынков»</b>. Структура сделана в стиле страниц API-документации (как в Kraken): навигация, карточки сообщений, справочник типов и кодов.</p>
+    <div class="grid">
+      <div class="kpi"><span>Template сообщений</span><b id="kpi-messages"></b></div>
+      <div class="kpi"><span>Сессионных</span><b id="kpi-session"></b></div>
+      <div class="kpi"><span>Торговых</span><b id="kpi-trade"></b></div>
+      <div class="kpi"><span>ENUM-типов</span><b id="kpi-enums"></b></div>
+    </div>
+  </section>
+
+  <section id="quickstart">
+    <h2>Быстрый старт</h2>
+    <div class="card">
+      <ol>
+        <li>Открыть TCP-соединение к SBE-GW (детали подключения выдаются MOEX отдельно).</li>
+        <li>Отправить <code>Establish (id=6)</code> с логином, паролем и <code>KeepAliveInterval</code>.</li>
+        <li>Получить <code>EstablishmentAck (id=7)</code> или <code>EstablishmentReject (id=8)</code>.</li>
+        <li>Поддерживать сессию через <code>Sequence (id=1)</code> и отслеживать нумерацию <code>NextSeqNo</code>.</li>
+        <li>Для торговых операций использовать <code>NewOrderSingle</code>, <code>OrderCancelRequest</code>, <code>OrderReplaceRequest</code>, <code>OrderMassCancelRequest</code>.</li>
+        <li>Результаты обработки и сделки приходят через <code>ExecutionReport (id=17)</code> и <code>OrderMassCancelReport (id=18)</code>.</li>
+        <li>При пропусках сообщений использовать <code>RetransmitRequest (id=2)</code> → <code>Retransmission (id=3)</code>.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="session">
+    <h2>Сессионный уровень</h2>
+    <div class="card">
+      <p>Покрыты все сценарии из спецификации: установление/завершение сессии, heartbeat/мониторинг, нумерация сообщений, повторная отправка, восстановление после сбоя, сброс sequence-номеров, отклонения запросов и отключение при переполнении буфера.</p>
+      <div class="chips">
+        <span class="chip">Establish / Ack / Reject</span><span class="chip">Sequence</span><span class="chip">RetransmitRequest / Retransmission</span><span class="chip">Terminate</span><span class="chip">SessionReject</span><span class="chip">ChangePassword / Ack / Reject</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="trading">
+    <h2>Торговый уровень</h2>
+    <div class="card">
+      <p>Покрыты все операции и ответы: добавление, снятие, массовое снятие, изменение заявки, отклонения через <code>BusinessMessageReject</code>, а также правила уникальности <code>ClOrdID</code>.</p>
+      <pre>Client → NewOrderSingle/Cancel/Replace/MassCancel
+SBE-GW → ExecutionReport / OrderMassCancelReport / BusinessMessageReject</pre>
+    </div>
+  </section>
+
+  <section id="messages">
+    <h2>Сообщения протокола</h2>
+    <input id="search" placeholder="Фильтр по имени, id, полям (например: execution, clordid, 17)" />
+    <div id="messages-container"></div>
+  </section>
+
+  <section id="enums">
+    <h2>Перечисления (ENUM)</h2>
+    <div id="enums-container"></div>
+  </section>
+
+  <section id="types">
+    <h2>Типы данных и composites</h2>
+    <div class="card"><div class="table-wrap"><table id="types-table"></table></div></div>
+    <div id="composites-container"></div>
+  </section>
+
+  <section id="sources">
+    <h2>Официальные источники</h2>
+    <div class="card">
+      <ul>
+        <li><a href="https://ftp.moex.com/pub/TWIME/ASTS/docs/asts_twime_ru_v1.2.pdf" target="_blank">Спецификация TWIME ASTS v1.2 (PDF)</a></li>
+        <li><a href="https://ftp.moex.com/pub/TWIME/ASTS/schemas/sbe_asts_gw.xml" target="_blank">Schema: sbe_asts_gw.xml</a></li>
+        <li><a href="https://ftp.moex.com/pub/TWIME/ASTS/schemas/sbe_asts_types.xml" target="_blank">Schema: sbe_asts_types.xml</a></li>
+        <li><a href="https://ftp.moex.com/pub/ClientsAPI/ASTS/docs/asts_order_cancel_messages.csv" target="_blank">Коды причин снятия заявки (CSV)</a></li>
+      </ul>
+      <p>Страница автономная: один HTML-файл, работает без сервера.</p>
+    </div>
+  </section>
+</main>
+</div>
+<script id="twime-data" type="application/json">{
+  &quot;schema&quot;: {
+    &quot;id&quot;: &quot;22343&quot;,
+    &quot;version&quot;: &quot;1&quot;,
+    &quot;package&quot;: &quot;sbe.asts.gw&quot;,
+    &quot;byteOrder&quot;: &quot;littleEndian&quot;,
+    &quot;semanticVersion&quot;: &quot;FIX5SP2&quot;
+  },
+  &quot;messages&quot;: [
+    {
+      &quot;id&quot;: 1,
+      &quot;name&quot;: &quot;Sequence&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;NextSeqNo&quot;,
+          &quot;id&quot;: &quot;789&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 2,
+      &quot;name&quot;: &quot;RetransmitRequest&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;BeginSeqNo&quot;,
+          &quot;id&quot;: &quot;7&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Count&quot;,
+          &quot;id&quot;: &quot;30003&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 3,
+      &quot;name&quot;: &quot;Retransmission&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTimestamp&quot;,
+          &quot;id&quot;: &quot;30001&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;NextSeqNo&quot;,
+          &quot;id&quot;: &quot;789&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Count&quot;,
+          &quot;id&quot;: &quot;30003&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 4,
+      &quot;name&quot;: &quot;Terminate&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TerminationCode&quot;,
+          &quot;id&quot;: &quot;20210&quot;,
+          &quot;type&quot;: &quot;TerminationCodeEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 5,
+      &quot;name&quot;: &quot;SessionReject&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RefTagID&quot;,
+          &quot;id&quot;: &quot;371&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SessionRejectReason&quot;,
+          &quot;id&quot;: &quot;373&quot;,
+          &quot;type&quot;: &quot;SessionRejectReasonEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 6,
+      &quot;name&quot;: &quot;Establish&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;KeepAliveInterval&quot;,
+          &quot;id&quot;: &quot;108&quot;,
+          &quot;type&quot;: &quot;uInt16&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;The Sequence message interval. Range 1000-15000 milliseconds.&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Username&quot;,
+          &quot;id&quot;: &quot;553&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;UserID or UserName.&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Password&quot;,
+          &quot;id&quot;: &quot;554&quot;,
+          &quot;type&quot;: &quot;String8&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Password.&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 7,
+      &quot;name&quot;: &quot;EstablishmentAck&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;NextSeqNo&quot;,
+          &quot;id&quot;: &quot;789&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;KeepAliveInterval&quot;,
+          &quot;id&quot;: &quot;108&quot;,
+          &quot;type&quot;: &quot;uInt16&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;The Sequence message interval. Range 1000-15000 milliseconds.&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 8,
+      &quot;name&quot;: &quot;EstablishmentReject&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;EstablishmentRejectCode&quot;,
+          &quot;id&quot;: &quot;30002&quot;,
+          &quot;type&quot;: &quot;uInt16&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 9,
+      &quot;name&quot;: &quot;ChangePassword&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Password&quot;,
+          &quot;id&quot;: &quot;554&quot;,
+          &quot;type&quot;: &quot;String8&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Password.&quot;
+        },
+        {
+          &quot;name&quot;: &quot;NewPassword&quot;,
+          &quot;id&quot;: &quot;925&quot;,
+          &quot;type&quot;: &quot;String8&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;New password.&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 10,
+      &quot;name&quot;: &quot;ChangePasswordAck&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Password&quot;,
+          &quot;id&quot;: &quot;554&quot;,
+          &quot;type&quot;: &quot;String8&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Password.&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 11,
+      &quot;name&quot;: &quot;ChangePasswordReject&quot;,
+      &quot;semanticType&quot;: &quot;&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RejReason&quot;,
+          &quot;id&quot;: &quot;103&quot;,
+          &quot;type&quot;: &quot;uint16&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 12,
+      &quot;name&quot;: &quot;BusinessMessageReject&quot;,
+      &quot;semanticType&quot;: &quot;j&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MsgSeqNum&quot;,
+          &quot;id&quot;: &quot;34&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrdRejReason&quot;,
+          &quot;id&quot;: &quot;103&quot;,
+          &quot;type&quot;: &quot;uint16&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 13,
+      &quot;name&quot;: &quot;NewOrderSingle&quot;,
+      &quot;semanticType&quot;: &quot;D&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;EffectiveTime&quot;,
+          &quot;id&quot;: &quot;168&quot;,
+          &quot;type&quot;: &quot;UTCTimeOnly&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Price&quot;,
+          &quot;id&quot;: &quot;44&quot;,
+          &quot;type&quot;: &quot;Decimal9NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderQty&quot;,
+          &quot;id&quot;: &quot;38&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MaxFloor&quot;,
+          &quot;id&quot;: &quot;111&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;CashOrderQty&quot;,
+          &quot;id&quot;: &quot;152&quot;,
+          &quot;type&quot;: &quot;Decimal2NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Side&quot;,
+          &quot;id&quot;: &quot;54&quot;,
+          &quot;type&quot;: &quot;BuySellEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrdType&quot;,
+          &quot;id&quot;: &quot;40&quot;,
+          &quot;type&quot;: &quot;OrdTypeEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MaxPriceLevels&quot;,
+          &quot;id&quot;: &quot;1090&quot;,
+          &quot;type&quot;: &quot;SplitFlagEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeInForce&quot;,
+          &quot;id&quot;: &quot;59&quot;,
+          &quot;type&quot;: &quot;IMMCancelEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderRestriction&quot;,
+          &quot;id&quot;: &quot;529&quot;,
+          &quot;type&quot;: &quot;MMOrderEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TradeThruTime&quot;,
+          &quot;id&quot;: &quot;5202&quot;,
+          &quot;type&quot;: &quot;OrderActivationTypeEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LiquidityType&quot;,
+          &quot;id&quot;: &quot;10526&quot;,
+          &quot;type&quot;: &quot;LiquidityTypeEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Account&quot;,
+          &quot;id&quot;: &quot;1&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SecondaryClOrdID&quot;,
+          &quot;id&quot;: &quot;526&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClientCode&quot;,
+          &quot;id&quot;: &quot;448&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Board&quot;,
+          &quot;id&quot;: &quot;20336&quot;,
+          &quot;type&quot;: &quot;BoardID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Board ID SECBOARD(4)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Symbol&quot;,
+          &quot;id&quot;: &quot;55&quot;,
+          &quot;type&quot;: &quot;SecurityID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Instrument ID SECODE(12)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;BrokerRef&quot;,
+          &quot;id&quot;: &quot;10600&quot;,
+          &quot;type&quot;: &quot;String20&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ComplianceID&quot;,
+          &quot;id&quot;: &quot;376&quot;,
+          &quot;type&quot;: &quot;ComplianceID&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 14,
+      &quot;name&quot;: &quot;OrderCancelRequest&quot;,
+      &quot;semanticType&quot;: &quot;F&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrigClOrdID&quot;,
+          &quot;id&quot;: &quot;41&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderID&quot;,
+          &quot;id&quot;: &quot;37&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 15,
+      &quot;name&quot;: &quot;OrderMassCancelRequest&quot;,
+      &quot;semanticType&quot;: &quot;g&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Side&quot;,
+          &quot;id&quot;: &quot;54&quot;,
+          &quot;type&quot;: &quot;BuySellEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Account&quot;,
+          &quot;id&quot;: &quot;1&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SecondaryClOrdID&quot;,
+          &quot;id&quot;: &quot;526&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClientCode&quot;,
+          &quot;id&quot;: &quot;448&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Board&quot;,
+          &quot;id&quot;: &quot;20336&quot;,
+          &quot;type&quot;: &quot;BoardID&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Board ID SECBOARD(4)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Symbol&quot;,
+          &quot;id&quot;: &quot;55&quot;,
+          &quot;type&quot;: &quot;SecurityID&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Instrument ID SECODE(12)&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 16,
+      &quot;name&quot;: &quot;OrderReplaceRequest&quot;,
+      &quot;semanticType&quot;: &quot;G&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderID&quot;,
+          &quot;id&quot;: &quot;37&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrigClOrdID&quot;,
+          &quot;id&quot;: &quot;41&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Price&quot;,
+          &quot;id&quot;: &quot;44&quot;,
+          &quot;type&quot;: &quot;Decimal9NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderQty&quot;,
+          &quot;id&quot;: &quot;38&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Side&quot;,
+          &quot;id&quot;: &quot;54&quot;,
+          &quot;type&quot;: &quot;BuySellEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Account&quot;,
+          &quot;id&quot;: &quot;1&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SecondaryClOrdID&quot;,
+          &quot;id&quot;: &quot;526&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClientCode&quot;,
+          &quot;id&quot;: &quot;448&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Board&quot;,
+          &quot;id&quot;: &quot;20336&quot;,
+          &quot;type&quot;: &quot;BoardID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Board ID SECBOARD(4)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Symbol&quot;,
+          &quot;id&quot;: &quot;55&quot;,
+          &quot;type&quot;: &quot;SecurityID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Instrument ID SECODE(12)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;BrokerRef&quot;,
+          &quot;id&quot;: &quot;10600&quot;,
+          &quot;type&quot;: &quot;String20&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ComplianceID&quot;,
+          &quot;id&quot;: &quot;376&quot;,
+          &quot;type&quot;: &quot;ComplianceID&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 17,
+      &quot;name&quot;: &quot;ExecutionReport&quot;,
+      &quot;semanticType&quot;: &quot;8&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;EffectiveTime&quot;,
+          &quot;id&quot;: &quot;168&quot;,
+          &quot;type&quot;: &quot;UTCTimeOnly&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderID&quot;,
+          &quot;id&quot;: &quot;37&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrigOrderID&quot;,
+          &quot;id&quot;: &quot;9945&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MDEntryID&quot;,
+          &quot;id&quot;: &quot;278&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrigClOrdID&quot;,
+          &quot;id&quot;: &quot;41&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TrdMatchID&quot;,
+          &quot;id&quot;: &quot;880&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Price&quot;,
+          &quot;id&quot;: &quot;44&quot;,
+          &quot;type&quot;: &quot;Decimal9NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderQty&quot;,
+          &quot;id&quot;: &quot;38&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MaxFloor&quot;,
+          &quot;id&quot;: &quot;111&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;CashOrderQty&quot;,
+          &quot;id&quot;: &quot;152&quot;,
+          &quot;type&quot;: &quot;Decimal2NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LastPx&quot;,
+          &quot;id&quot;: &quot;31&quot;,
+          &quot;type&quot;: &quot;Decimal9NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LastQty&quot;,
+          &quot;id&quot;: &quot;32&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LeavesQty&quot;,
+          &quot;id&quot;: &quot;151&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;CxlQty&quot;,
+          &quot;id&quot;: &quot;84&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PreMatchedCumQty&quot;,
+          &quot;id&quot;: &quot;18181&quot;,
+          &quot;type&quot;: &quot;uInt64NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MsgSeqNum&quot;,
+          &quot;id&quot;: &quot;34&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrdCancelReason&quot;,
+          &quot;id&quot;: &quot;9947&quot;,
+          &quot;type&quot;: &quot;uInt8NULL&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ExecType&quot;,
+          &quot;id&quot;: &quot;150&quot;,
+          &quot;type&quot;: &quot;ExecTypeEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrdStatus&quot;,
+          &quot;id&quot;: &quot;39&quot;,
+          &quot;type&quot;: &quot;OrderStatusEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;StipulationValue&quot;,
+          &quot;id&quot;: &quot;6636&quot;,
+          &quot;type&quot;: &quot;TradeTypeEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Side&quot;,
+          &quot;id&quot;: &quot;54&quot;,
+          &quot;type&quot;: &quot;BuySellEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrdType&quot;,
+          &quot;id&quot;: &quot;40&quot;,
+          &quot;type&quot;: &quot;OrdTypeEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MaxPriceLevels&quot;,
+          &quot;id&quot;: &quot;1090&quot;,
+          &quot;type&quot;: &quot;SplitFlagEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeInForce&quot;,
+          &quot;id&quot;: &quot;59&quot;,
+          &quot;type&quot;: &quot;IMMCancelEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;OrderRestriction&quot;,
+          &quot;id&quot;: &quot;529&quot;,
+          &quot;type&quot;: &quot;MMOrderEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TradeThruTime&quot;,
+          &quot;id&quot;: &quot;5202&quot;,
+          &quot;type&quot;: &quot;OrderActivationTypeEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LiquidityType&quot;,
+          &quot;id&quot;: &quot;10526&quot;,
+          &quot;type&quot;: &quot;LiquidityTypeEnum&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;LastLiquidityInd&quot;,
+          &quot;id&quot;: &quot;851&quot;,
+          &quot;type&quot;: &quot;LastLiquidityIndEnum&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Account&quot;,
+          &quot;id&quot;: &quot;1&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SecondaryClOrdID&quot;,
+          &quot;id&quot;: &quot;526&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClientCode&quot;,
+          &quot;id&quot;: &quot;448&quot;,
+          &quot;type&quot;: &quot;String12&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Board&quot;,
+          &quot;id&quot;: &quot;20336&quot;,
+          &quot;type&quot;: &quot;BoardID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Board ID SECBOARD(4)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Symbol&quot;,
+          &quot;id&quot;: &quot;55&quot;,
+          &quot;type&quot;: &quot;SecurityID&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;Instrument ID SECODE(12)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;BrokerRef&quot;,
+          &quot;id&quot;: &quot;10600&quot;,
+          &quot;type&quot;: &quot;String20&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ComplianceID&quot;,
+          &quot;id&quot;: &quot;376&quot;,
+          &quot;type&quot;: &quot;ComplianceID&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;id&quot;: 18,
+      &quot;name&quot;: &quot;OrderMassCancelReport&quot;,
+      &quot;semanticType&quot;: &quot;r&quot;,
+      &quot;fields&quot;: [
+        {
+          &quot;name&quot;: &quot;SendingTime&quot;,
+          &quot;id&quot;: &quot;52&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TimeStamp&quot;,
+          &quot;id&quot;: &quot;60&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;RequestTime&quot;,
+          &quot;id&quot;: &quot;5979&quot;,
+          &quot;type&quot;: &quot;UTCTimestamp&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdID&quot;,
+          &quot;id&quot;: &quot;11&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TotalAffectedOrders&quot;,
+          &quot;id&quot;: &quot;533&quot;,
+          &quot;type&quot;: &quot;uInt64&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MsgSeqNum&quot;,
+          &quot;id&quot;: &quot;34&quot;,
+          &quot;type&quot;: &quot;uInt32&quot;,
+          &quot;presence&quot;: &quot;required&quot;,
+          &quot;nullValue&quot;: &quot;&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    }
+  ],
+  &quot;enums&quot;: [
+    {
+      &quot;name&quot;: &quot;SessionRejectReasonEnum&quot;,
+      &quot;encodingType&quot;: &quot;uint8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;UserNameInvalid&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ValueIsIncorrect&quot;,
+          &quot;value&quot;: &quot;5&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;SystemIsUnavailable&quot;,
+          &quot;value&quot;: &quot;100&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClOrdIdIsNotUnique&quot;,
+          &quot;value&quot;: &quot;101&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;TerminationCodeEnum&quot;,
+      &quot;encodingType&quot;: &quot;uint8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Finished&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;UnspecifiedError&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ReRequestOutOfBounds&quot;,
+          &quot;value&quot;: &quot;2&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ReRequestInProgress&quot;,
+          &quot;value&quot;: &quot;3&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TooFastClient&quot;,
+          &quot;value&quot;: &quot;4&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TooSlowClient&quot;,
+          &quot;value&quot;: &quot;5&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MissedHeartbeat&quot;,
+          &quot;value&quot;: &quot;6&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;InvalidMessage&quot;,
+          &quot;value&quot;: &quot;7&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;TCPFailure&quot;,
+          &quot;value&quot;: &quot;8&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;InvalidSequenceNumber&quot;,
+          &quot;value&quot;: &quot;9&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ServerShutdown&quot;,
+          &quot;value&quot;: &quot;10&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;MustChangePassword&quot;,
+          &quot;value&quot;: &quot;11&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;NeedRelogin&quot;,
+          &quot;value&quot;: &quot;12&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;BuySellEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Buy&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Sell&quot;,
+          &quot;value&quot;: &quot;2&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;OrdTypeEnum&quot;,
+      &quot;encodingType&quot;: &quot;char&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Market&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Limit&quot;,
+          &quot;value&quot;: &quot;2&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ClosingPeriod&quot;,
+          &quot;value&quot;: &quot;B&quot;,
+          &quot;description&quot;: &quot;Order of the closing period&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;SplitFlagEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Split&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;Price split allowed&quot;
+        },
+        {
+          &quot;name&quot;: &quot;One&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;One price only&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;IMMCancelEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Day&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;Put in the queue&quot;
+        },
+        {
+          &quot;name&quot;: &quot;FoK&quot;,
+          &quot;value&quot;: &quot;4&quot;,
+          &quot;description&quot;: &quot;Fill or kill&quot;
+        },
+        {
+          &quot;name&quot;: &quot;IoC&quot;,
+          &quot;value&quot;: &quot;3&quot;,
+          &quot;description&quot;: &quot;Withdraw the balance&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PO&quot;,
+          &quot;value&quot;: &quot;8&quot;,
+          &quot;description&quot;: &quot;Passive Only&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;MMOrderEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;MarketMaker&quot;,
+          &quot;value&quot;: &quot;5&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;OrderActivationTypeEnum&quot;,
+      &quot;encodingType&quot;: &quot;char&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;ClosingAuction&quot;,
+          &quot;value&quot;: &quot;C&quot;,
+          &quot;description&quot;: &quot;Order to the closing auction&quot;
+        },
+        {
+          &quot;name&quot;: &quot;ActivationTime&quot;,
+          &quot;value&quot;: &quot;T&quot;,
+          &quot;description&quot;: &quot;Order with activation time&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;ExecTypeEnum&quot;,
+      &quot;encodingType&quot;: &quot;char&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;New&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;New order&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Cancel&quot;,
+          &quot;value&quot;: &quot;4&quot;,
+          &quot;description&quot;: &quot;Order cancel&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Replace&quot;,
+          &quot;value&quot;: &quot;5&quot;,
+          &quot;description&quot;: &quot;Order replace&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PCancel&quot;,
+          &quot;value&quot;: &quot;6&quot;,
+          &quot;description&quot;: &quot;Pending Cancel&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Trade&quot;,
+          &quot;value&quot;: &quot;F&quot;,
+          &quot;description&quot;: &quot;Trade&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PMTrade&quot;,
+          &quot;value&quot;: &quot;L&quot;,
+          &quot;description&quot;: &quot;PreMatched Trade&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PMTradeC&quot;,
+          &quot;value&quot;: &quot;H&quot;,
+          &quot;description&quot;: &quot;PreMatched Trade Cancel&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;OrderStatusEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;New&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;New&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PFilled&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;Partially filled&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Filled&quot;,
+          &quot;value&quot;: &quot;2&quot;,
+          &quot;description&quot;: &quot;Filled&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Canceled&quot;,
+          &quot;value&quot;: &quot;4&quot;,
+          &quot;description&quot;: &quot;Canceled&quot;
+        },
+        {
+          &quot;name&quot;: &quot;PCanceled&quot;,
+          &quot;value&quot;: &quot;6&quot;,
+          &quot;description&quot;: &quot;Pending Cancel (i.e. result of Order Cancel Request)&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Suspended&quot;,
+          &quot;value&quot;: &quot;9&quot;,
+          &quot;description&quot;: &quot;Suspended&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;LiquidityTypeEnum&quot;,
+      &quot;encodingType&quot;: &quot;char&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Quote&quot;,
+          &quot;value&quot;: &quot;E&quot;,
+          &quot;description&quot;: &quot;Quoter&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Internal&quot;,
+          &quot;value&quot;: &quot;I&quot;,
+          &quot;description&quot;: &quot;Internal liquidity&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;LastLiquidityIndEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Add&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;Add liguidity&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Removed&quot;,
+          &quot;value&quot;: &quot;2&quot;,
+          &quot;description&quot;: &quot;Removed liguidity&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;TradeTypeEnum&quot;,
+      &quot;encodingType&quot;: &quot;int8&quot;,
+      &quot;values&quot;: [
+        {
+          &quot;name&quot;: &quot;Regular&quot;,
+          &quot;value&quot;: &quot;0&quot;,
+          &quot;description&quot;: &quot;&quot;
+        },
+        {
+          &quot;name&quot;: &quot;Iceberg&quot;,
+          &quot;value&quot;: &quot;1&quot;,
+          &quot;description&quot;: &quot;&quot;
+        }
+      ]
+    }
+  ],
+  &quot;types&quot;: [
+    {
+      &quot;name&quot;: &quot;uInt8&quot;,
+      &quot;primitiveType&quot;: &quot;uint8&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt8NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;255&quot;,
+      &quot;primitiveType&quot;: &quot;uint8&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt16&quot;,
+      &quot;primitiveType&quot;: &quot;uint16&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt16NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;65535&quot;,
+      &quot;primitiveType&quot;: &quot;uint16&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt32&quot;,
+      &quot;primitiveType&quot;: &quot;uint32&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt32NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;4294967295&quot;,
+      &quot;primitiveType&quot;: &quot;uint32&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt64&quot;,
+      &quot;primitiveType&quot;: &quot;uint64&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;uInt64NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;18446744073709551615&quot;,
+      &quot;primitiveType&quot;: &quot;uint64&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;Int32&quot;,
+      &quot;primitiveType&quot;: &quot;int32&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;Int32NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;2147483647&quot;,
+      &quot;primitiveType&quot;: &quot;int32&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;Int64&quot;,
+      &quot;primitiveType&quot;: &quot;int64&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;Int64NULL&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;9223372036854775807&quot;,
+      &quot;primitiveType&quot;: &quot;int64&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;UTCTimestamp&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;18446744073709551615&quot;,
+      &quot;primitiveType&quot;: &quot;uint64&quot;,
+      &quot;description&quot;: &quot;UTC timestamp with nanoseconds precision&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;UTCTimeOnly&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;18446744073709551615&quot;,
+      &quot;primitiveType&quot;: &quot;uint64&quot;,
+      &quot;description&quot;: &quot;Time of day with nanoseconds precision&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;Char&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String4&quot;,
+      &quot;length&quot;: &quot;4&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String5&quot;,
+      &quot;length&quot;: &quot;5&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String6&quot;,
+      &quot;length&quot;: &quot;6&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String8&quot;,
+      &quot;length&quot;: &quot;8&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String12&quot;,
+      &quot;length&quot;: &quot;12&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String20&quot;,
+      &quot;length&quot;: &quot;20&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;String256&quot;,
+      &quot;length&quot;: &quot;256&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;BoardID&quot;,
+      &quot;length&quot;: &quot;4&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;description&quot;: &quot;Board ID value in trading system SECBOARD(4)&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;SecurityID&quot;,
+      &quot;length&quot;: &quot;12&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;description&quot;: &quot;Instrument ID value in trading system SECODE(12)&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;ExchangeTradingSessionID&quot;,
+      &quot;primitiveType&quot;: &quot;uint32&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot;4294967295&quot;,
+      &quot;description&quot;: &quot;Trading session ID&quot;,
+      &quot;const&quot;: null
+    },
+    {
+      &quot;name&quot;: &quot;MarketID&quot;,
+      &quot;length&quot;: &quot;4&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;constant&quot;,
+      &quot;const&quot;: &quot;MOEX&quot;
+    },
+    {
+      &quot;name&quot;: &quot;SecurityIDSource&quot;,
+      &quot;presence&quot;: &quot;constant&quot;,
+      &quot;length&quot;: &quot;1&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;const&quot;: &quot;4&quot;
+    },
+    {
+      &quot;name&quot;: &quot;ComplianceID&quot;,
+      &quot;length&quot;: &quot;1&quot;,
+      &quot;primitiveType&quot;: &quot;char&quot;,
+      &quot;presence&quot;: &quot;optional&quot;,
+      &quot;nullValue&quot;: &quot; &quot;,
+      &quot;const&quot;: null
+    }
+  ],
+  &quot;composites&quot;: [
+    {
+      &quot;name&quot;: &quot;monthYearNull&quot;,
+      &quot;description&quot;: &quot;&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;year&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;65535&quot;
+        },
+        {
+          &quot;name&quot;: &quot;month&quot;,
+          &quot;primitiveType&quot;: &quot;uint8&quot;,
+          &quot;minValue&quot;: &quot;1&quot;,
+          &quot;maxValue&quot;: &quot;12&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;255&quot;
+        },
+        {
+          &quot;name&quot;: &quot;day&quot;,
+          &quot;primitiveType&quot;: &quot;uint8&quot;,
+          &quot;minValue&quot;: &quot;1&quot;,
+          &quot;maxValue&quot;: &quot;31&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;255&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;messageHeader&quot;,
+      &quot;description&quot;: &quot;Template ID and length of message root&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;blockLength&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;
+        },
+        {
+          &quot;name&quot;: &quot;templateId&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;
+        },
+        {
+          &quot;name&quot;: &quot;schemaId&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;
+        },
+        {
+          &quot;name&quot;: &quot;version&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;groupSize&quot;,
+      &quot;description&quot;: &quot;Repeating group dimensions&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;blockLength&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;
+        },
+        {
+          &quot;name&quot;: &quot;numInGroup&quot;,
+          &quot;primitiveType&quot;: &quot;uint8&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;Utf8String&quot;,
+      &quot;description&quot;: &quot;Variable-length utf-8 string&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;length&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;,
+          &quot;semanticType&quot;: &quot;Length&quot;
+        },
+        {
+          &quot;name&quot;: &quot;varData&quot;,
+          &quot;length&quot;: &quot;0&quot;,
+          &quot;primitiveType&quot;: &quot;uint8&quot;,
+          &quot;semanticType&quot;: &quot;data&quot;,
+          &quot;characterEncoding&quot;: &quot;UTF-8&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;VarString&quot;,
+      &quot;description&quot;: &quot;Variable-length string&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;length&quot;,
+          &quot;primitiveType&quot;: &quot;uint16&quot;,
+          &quot;semanticType&quot;: &quot;Length&quot;
+        },
+        {
+          &quot;name&quot;: &quot;varData&quot;,
+          &quot;length&quot;: &quot;0&quot;,
+          &quot;primitiveType&quot;: &quot;uint8&quot;,
+          &quot;semanticType&quot;: &quot;data&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;Decimal2NULL&quot;,
+      &quot;description&quot;: &quot;Price type&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;mantissa&quot;,
+          &quot;description&quot;: &quot;mantissa&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;9223372036854775807&quot;,
+          &quot;primitiveType&quot;: &quot;int64&quot;
+        },
+        {
+          &quot;name&quot;: &quot;exponent&quot;,
+          &quot;description&quot;: &quot;exponent&quot;,
+          &quot;presence&quot;: &quot;constant&quot;,
+          &quot;primitiveType&quot;: &quot;int8&quot;
+        }
+      ]
+    },
+    {
+      &quot;name&quot;: &quot;Decimal9NULL&quot;,
+      &quot;description&quot;: &quot;Price type&quot;,
+      &quot;parts&quot;: [
+        {
+          &quot;name&quot;: &quot;mantissa&quot;,
+          &quot;description&quot;: &quot;mantissa&quot;,
+          &quot;presence&quot;: &quot;optional&quot;,
+          &quot;nullValue&quot;: &quot;9223372036854775807&quot;,
+          &quot;primitiveType&quot;: &quot;int64&quot;
+        },
+        {
+          &quot;name&quot;: &quot;exponent&quot;,
+          &quot;description&quot;: &quot;exponent&quot;,
+          &quot;presence&quot;: &quot;constant&quot;,
+          &quot;primitiveType&quot;: &quot;int8&quot;
+        }
+      ]
+    }
+  ]
+}
+</script>
+<script>
+const data = JSON.parse(document.getElementById('twime-data').textContent);
+const sessionIds = new Set([1,2,3,4,5,6,7,8,9,10,11]);
+const tradeIds = new Set([12,13,14,15,16,17,18]);
+document.getElementById('kpi-messages').textContent = data.messages.length;
+document.getElementById('kpi-session').textContent = data.messages.filter(m=>sessionIds.has(m.id)).length;
+document.getElementById('kpi-trade').textContent = data.messages.filter(m=>tradeIds.has(m.id)).length;
+document.getElementById('kpi-enums').textContent = data.enums.length;
+
+function renderMessages(items){
+  const c=document.getElementById('messages-container');
+  c.innerHTML='';
+  items.sort((a,b)=>a.id-b.id).forEach(m=>{
+    const d=document.createElement('details');
+    const kind=sessionIds.has(m.id)?'Session':'Trade';
+    d.innerHTML=`<summary>${m.name} <code>id=${m.id}</code> <span class="chip">${kind}</span> ${m.semanticType?`<span class='chip'>semanticType=${m.semanticType}</span>`:''}</summary>
+      <div class='details-body'>
+      <div class='table-wrap'><table><thead><tr><th>Field</th><th>Tag</th><th>Type</th><th>Presence</th><th>Description</th></tr></thead>
+      <tbody>${m.fields.map(f=>`<tr><td><code>${f.name}</code></td><td>${f.id||'-'}</td><td><code>${f.type}</code></td><td>${f.presence}</td><td>${f.description||'-'}</td></tr>`).join('')}</tbody></table></div></div>`;
+    c.appendChild(d);
+  });
+}
+renderMessages([...data.messages]);
+
+document.getElementById('search').addEventListener('input',e=>{
+  const q=e.target.value.trim().toLowerCase();
+  const filtered=data.messages.filter(m=>{
+    const hay=[m.name,m.id,m.semanticType,...m.fields.flatMap(f=>[f.name,f.id,f.type,f.description])].join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  renderMessages(filtered);
+});
+
+const ec=document.getElementById('enums-container');
+data.enums.forEach(en=>{
+ const d=document.createElement('details');
+ d.innerHTML=`<summary>${en.name} <code>${en.encodingType}</code></summary><div class='details-body'><div class='table-wrap'><table><thead><tr><th>Name</th><th>Value</th><th>Description</th></tr></thead><tbody>${en.values.map(v=>`<tr><td><code>${v.name}</code></td><td><code>${v.value}</code></td><td>${v.description||'-'}</td></tr>`).join('')}</tbody></table></div></div>`;
+ ec.appendChild(d);
+});
+
+const tt=document.getElementById('types-table');
+tt.innerHTML=`<thead><tr><th>Name</th><th>Primitive</th><th>Presence</th><th>Length</th><th>Null/Const</th><th>Description</th></tr></thead><tbody>${data.types.map(t=>`<tr><td><code>${t.name}</code></td><td>${t.primitiveType||'-'}</td><td>${t.presence||'required'}</td><td>${t.length||'-'}</td><td>${t.nullValue||t.const||'-'}</td><td>${t.description||'-'}</td></tr>`).join('')}</tbody>`;
+
+const cc=document.getElementById('composites-container');
+data.composites.forEach(c=>{
+ const d=document.createElement('details');
+ d.innerHTML=`<summary>${c.name} ${c.description?`— ${c.description}`:''}</summary><div class='details-body'><div class='table-wrap'><table><thead><tr><th>Part</th><th>Primitive</th><th>Presence</th><th>Null</th><th>Details</th></tr></thead><tbody>${c.parts.map(p=>`<tr><td><code>${p.name}</code></td><td>${p.primitiveType||'-'}</td><td>${p.presence||'required'}</td><td>${p.nullValue||'-'}</td><td>${Object.entries(p).filter(([k])=>!['name','primitiveType','presence','nullValue'].includes(k)).map(([k,v])=>`${k}=${v}`).join(', ')||'-'}</td></tr>`).join('')}</tbody></table></div></div>`;
+ cc.appendChild(d);
+});
+</script>
+</body>
+</html>
